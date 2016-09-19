@@ -559,6 +559,23 @@ class WebWeixin(object):
         fn = 'voice_' + msgid + '.mp3'
         return self._saveFile(fn, data, 'webwxgetvoice')
 
+    def getGroupID(self, name):
+        id = '@@000'
+        for member in self.GroupList:
+            if member['NickName'] == name:
+                id = member['UserName']
+        if id == '@@000':
+            # 现有群里面查不到
+            GroupList = self.getNameById(id)
+            for group in GroupList:
+                self.GroupList.append(group)
+                if group['NickName'] == name:
+                    id = group['UserName']
+                    MemberList = group['MemberList']
+                    for member in MemberList:
+                        self.GroupMemeberList.append(member)
+        return id
+
     def getGroupName(self, id):
         name = '未知群'
         for member in self.GroupList:
@@ -658,6 +675,16 @@ class WebWeixin(object):
                 if re.search(":<br/>", content, re.IGNORECASE):
                     [people, content] = content.split(':<br/>')
                     groupName = srcName
+
+		    print "Group Name",groupName
+                    now_id = self.getGroupID(groupName)
+                    print groupName,":",now_id
+		    id = self.getGroupID("常常联系")
+        	    if now_id != id:
+                        print id,":",content
+		        send_msg = content.replace('<br/>', '\n')
+                        self.webwxsendmsg(send_msg+"。", id)
+
                     srcName = self.getUserRemarkName(people)
                     dstName = 'GROUP'
                 else:
@@ -948,6 +975,12 @@ class WebWeixin(object):
                 [name, file_name] = text[3:].split(':')
                 self.sendEmotion(name, file_name)
                 logging.debug('发送表情')
+	    # send msg to group
+	    elif text[:3] == 'g->':
+		[name, word] = text[3:].split(':')
+		id = self.getGroupID(name)
+                print "send msg to group",id
+		self.webwxsendmsg(word, id)
 
     def _safe_open(self, path):
         if self.autoOpen:
