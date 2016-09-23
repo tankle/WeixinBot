@@ -560,6 +560,11 @@ class WebWeixin(object):
         return self._saveFile(fn, data, 'webwxgetvoice')
 
     def getGroupID(self, name):
+        """
+        根据name获得group的id
+        :param name:
+        :return:
+        """
         id = '@@000'
         for member in self.GroupList:
             if member['NickName'] == name:
@@ -629,7 +634,7 @@ class WebWeixin(object):
             logging.debug(id)
         return name
 
-    def getUSerID(self, name):
+    def getUserID(self, name):
         for member in self.MemberList:
             if name == member['RemarkName'] or name == member['NickName']:
                 return member['UserName']
@@ -651,6 +656,7 @@ class WebWeixin(object):
             content = msg['raw_msg']['Content'].replace(
                 '&lt;', '<').replace('&gt;', '>')
             message_id = msg['raw_msg']['MsgId']
+            msgType = msg['raw_msg']['MsgType']
 
             if content.find('http://weixin.qq.com/cgi-bin/redirectforward?args=') != -1:
                 # 地理位置消息
@@ -676,14 +682,8 @@ class WebWeixin(object):
                     [people, content] = content.split(':<br/>')
                     groupName = srcName
 
-		    print "Group Name",groupName
-                    now_id = self.getGroupID(groupName)
-                    print groupName,":",now_id
-		    id = self.getGroupID("常常联系")
-        	    if now_id != id:
-                        print id,":",content
-		        send_msg = content.replace('<br/>', '\n')
-                        self.webwxsendmsg(send_msg+"。", id)
+                    print "Group Name", groupName
+                    self.sync_msg_to_group(groupName, content, msg)
 
                     srcName = self.getUserRemarkName(people)
                     dstName = 'GROUP'
@@ -743,12 +743,14 @@ class WebWeixin(object):
             elif msgType == 3:
                 image = self.webwxgetmsgimg(msgid)
                 raw_msg = {'raw_msg': msg,
+                           'image': image,
                            'message': '%s 发送了一张图片: %s' % (name, image)}
                 self._showMsg(raw_msg)
                 self._safe_open(image)
             elif msgType == 34:
                 voice = self.webwxgetvoice(msgid)
                 raw_msg = {'raw_msg': msg,
+                           'voice': voice,
                            'message': '%s 发了一段语音: %s' % (name, voice)}
                 self._showMsg(raw_msg)
                 self._safe_open(voice)
@@ -795,6 +797,7 @@ class WebWeixin(object):
             elif msgType == 62:
                 video = self.webwxgetvideo(msgid)
                 raw_msg = {'raw_msg': msg,
+                           'video': video,
                            'message': '%s 发了一段小视频: %s' % (name, video)}
                 self._showMsg(raw_msg)
                 self._safe_open(video)
@@ -849,7 +852,7 @@ class WebWeixin(object):
                 time.sleep(time.time() - self.lastCheckTs)
 
     def sendMsg(self, name, word, isfile=False):
-        id = self.getUSerID(name)
+        id = self.getUserID(name)
         if id:
             if isfile:
                 with open(word, 'r') as f:
@@ -889,7 +892,7 @@ class WebWeixin(object):
         media_id = ""
         if response is not None:
             media_id = response['MediaId']
-        user_id = self.getUSerID(name)
+        user_id = self.getUserID(name)
         response = self.webwxsendmsgimg(user_id, media_id)
 
     def sendEmotion(self, name, file_name):
@@ -897,7 +900,7 @@ class WebWeixin(object):
         media_id = ""
         if response is not None:
             media_id = response['MediaId']
-        user_id = self.getUSerID(name)
+        user_id = self.getUserID(name)
         response = self.webwxsendmsgemotion(user_id, media_id)
 
     @catchKeyboardInterrupt
@@ -913,8 +916,8 @@ class WebWeixin(object):
             self.genQRCode()
             print '[*] 请使用微信扫描二维码以登录 ... '
             if not self.waitForLogin():
-                continue
                 print '[*] 请在手机上点击确认以登录 ... '
+                continue
             if not self.waitForLogin(0):
                 continue
             break
@@ -975,12 +978,12 @@ class WebWeixin(object):
                 [name, file_name] = text[3:].split(':')
                 self.sendEmotion(name, file_name)
                 logging.debug('发送表情')
-	    # send msg to group
-	    elif text[:3] == 'g->':
-		[name, word] = text[3:].split(':')
-		id = self.getGroupID(name)
-                print "send msg to group",id
-		self.webwxsendmsg(word, id)
+            # send msg to group
+            elif text[:3] == 'g->':
+                [name, word] = text[3:].split(':')
+                id = self.getGroupID(name)
+                print "send msg to group", id
+                self.webwxsendmsg(word, id)
 
     def _safe_open(self, path):
         if self.autoOpen:
@@ -1085,6 +1088,37 @@ class WebWeixin(object):
                 return pm.group(1)
         return '未知'
 
+    def sync_msg_to_group(self, group_name, content, raw_msg):
+        """
+        发送 group_name 中的消息到指定的群中
+        :param raw_msg:
+        :param group_name:
+        :param content:
+        :return:
+        """
+        now_id = self.getGroupID(group_name)
+        print group_name, ":", now_id
+        id = self.getUserID("谭聪")
+        if now_id != id:
+            msgType = raw_msg['raw_msg']['MsgType']
+            # 文字信息
+            if msgType == 1:
+                print id, ":", content
+                send_msg = content.replace('<br/>', '\n')
+                self.webwxsendmsg(send_msg+"。", id)
+            # 图片信息
+            elif msgType == 3:
+                image = raw_msg['image']
+                self.sendImg(id, image)
+                print "send a image", image
+            # 语音信息
+            elif msgType == 34:
+                voice = raw_msg['voice']
+                # self.send
+                pass
+            # 视频信息
+            elif msgType == 62:
+                pass
 
 class UnicodeStreamFilter:
 
